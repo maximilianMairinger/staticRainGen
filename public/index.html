@@ -1,1 +1,460 @@
-<!doctypehtml><html dir=ltr lang=en><meta charset=utf-8><title>Static rain gen</title><meta content="user-scalable=no,width=device-width,initial-scale=1,maximum-scale=1"name=viewport><meta content=no name=msapplication-tap-highlight><link href=/res/font/avertacy-regular.woff2 rel=prefetch type=font/woff2 as=font crossorigin importance=low><script src=/dist/staticRainGen.js></script><link href=/res/img/favicon/apple-touch-icon.png rel=apple-touch-icon sizes=180x180><link href=/res/img/favicon/favicon-32x32.png rel=icon sizes=32x32 type=image/png><link href=/res/img/favicon/favicon-16x16.png rel=icon sizes=16x16 type=image/png><link href=/res/img/favicon/safari-pinned-tab.svg rel=mask-icon color=#003fd2><link href=/res/img/favicon/favicon.ico rel="shortcut icon"><meta content=#ffffff name=msapplication-TileColor><meta content=/res/img/favicon/browserconfig.xml name=msapplication-config><meta content=#ffffff name=theme-color><style>html{height:100%;width:100%}body{margin:0;-webkit-tap-highlight-color:transparent;width:100%;height:100%;overflow:hidden;font-family:'Averta CY',Arial,sans-serif}c-center{width:100%;height:100%;overflow:auto;display:flex;align-items:center;justify-content:center}c-error{font-size:20px;text-align:center;min-width:300px;max-width:70%}::selection{background:rgba(0,0,0,.15)}@font-face{font-family:'Averta CY';src:url('/res/font/avertacy-regular.woff2') format('woff2'),url('/res/font/avertacy-regular.woff') format('woff');font-style:normal;font-weight:400;font-display:swap}@font-face{font-family:'Averta Cy';src:url('/res/font/avertacy-bold.woff2') format('woff2'),url('/res/font/avertacy-bold.woff') format('woff');font-weight:700;font-style:normal;font-display:swap}</style><body><c-init><c-center><c-error>Ouch, something went wrong while loading this site. If you'd like to use this page please consider using a modern browser (like <a href=https://www.google.com/chrome/ >chrome</a>).<br><br>Note that java-script is required to load this page.</c-error></c-center><script>!function(){var t=document.querySelector("c-center");t.style.opacity=0,setTimeout((function(){t.style.transition=".5s",setTimeout((function(){t.style.opacity=1}),100)}),400)}()</script></c-init>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Binary Rain Generator</title>
+    <style>
+        :root {
+            --bg-color: #000000;
+            --text-color: #00ff00;
+            --font-family: 'Space Mono', monospace;
+        }
+
+        body {
+            background-color: #111;
+            color: #eee;
+            margin: 0;
+            font-family: system-ui, -apple-system, sans-serif;
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        #controls {
+            width: 300px;
+            background: #222;
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        h2 { margin-top: 0; font-size: 1.2rem; border-bottom: 1px solid #444; padding-bottom: 10px; }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        label {
+            font-size: 0.85rem;
+            color: #aaa;
+            font-weight: 500;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        select {
+            background: #333;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+
+        input[type="color"] {
+            width: 100%;
+            height: 40px;
+            border: none;
+            cursor: pointer;
+            background: none;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+        
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+            margin-top: 10px;
+        }
+        button:hover { background: #0077ee; }
+
+        /* Preview Area */
+        #preview-container {
+            flex: 1;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: auto;
+            position: relative;
+        }
+
+        #output {
+            font-family: var(--font-family);
+            margin: 0;
+            white-space: pre;
+            line-height: 1;
+            letter-spacing: 0;
+            font-weight: 700;
+            /* Ensure it doesn't shrink below content size */
+            min-width: min-content; 
+            min-height: min-content;
+        }
+
+        /* Utility */
+        .row { display: flex; gap: 10px; }
+        .row > * { flex: 1; }
+        
+        .hint { font-size: 0.75rem; color: #666; margin-top: -2px; }
+
+        .github-link {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: auto; /* Push to bottom if sidebar has height */
+            padding: 10px;
+            color: #666;
+            transition: all 0.2s ease;
+            border-radius: 12px;
+            text-decoration: none;
+        }
+
+        .github-link:hover {
+            color: #fff;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body>
+
+<aside id="controls">
+    <h2>Configuration</h2>
+
+    <div class="row">
+        <div class="control-group">
+            <label for="width">Width (chars)</label>
+            <input type="number" id="width" value="80" min="1">
+        </div>
+        <div class="control-group">
+            <label for="height">Height (chars)</label>
+            <input type="number" id="height" value="40" min="1">
+        </div>
+    </div>
+
+    <div class="control-group">
+        <label for="chars">Characters</label>
+        <input type="text" id="chars" value="01">
+    </div>
+
+    <div class="control-group">
+        <label for="fontName">Google Font Name</label>
+        <input type="text" id="fontName" value="Space Mono" placeholder="e.g. Roboto Mono">
+        <span class="hint">Will auto-load from Google Fonts</span>
+    </div>
+
+    <div class="row">
+        <div class="control-group">
+            <label for="textColor">Text Color</label>
+            <input type="color" id="textColor" value="#00ff00">
+        </div>
+        <div class="control-group">
+            <label for="bgColor">Background</label>
+            <input type="color" id="bgColor" value="#000000">
+        </div>
+    </div>
+
+    <div class="control-group">
+        <label for="direction">Direction</label>
+        <select id="direction">
+            <option value="normal">Top-Down (Stalactites)</option>
+            <option value="reverse">Bottom-Up (Stalagmites)</option>
+        </select>
+    </div>
+
+    <div class="control-group">
+        <label for="decay">Decay Chance (0-1)</label>
+        <input type="range" id="decay" min="0" max="1" step="0.01" value="0.05">
+        <span class="hint" id="decayVal">0.05</span>
+    </div>
+
+    <div class="control-group">
+        <label for="seed">Seed</label>
+        <input type="text" id="seed" value="" placeholder="Random">
+    </div>
+    
+    <button id="regenerate">Regenerate</button>
+    <button id="download">Download HTML</button>
+
+    <a href="https://github.com/maximilianMairinger/staticRainGen" target="_blank" class="github-link" aria-label="View Source on GitHub">
+        <svg height="32" aria-hidden="true" viewBox="0 0 16 16" version="1.1" width="32" data-view-component="true">
+            <path fill="currentColor" d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"></path>
+        </svg>
+    </a>
+</aside>
+
+<main id="preview-container">
+    <pre id="output"></pre>
+</main>
+
+<script>
+    // --- Logic ---
+
+    // PRNG
+    function mulberry32(a) {
+        return function() {
+          var t = a += 0x6D2B79F5;
+          t = Math.imul(t ^ t >>> 15, t | 1);
+          t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+          return ((t ^ t >>> 14) >>> 0) / 4294967296;
+        }
+    }
+
+    function generateRain(config) {
+        // Seed processing
+        let seedVal = config.seed;
+        // If seed is empty, generate a random one for this run, but don't save it to config unless user wants to.
+        // Actually, if it's empty, we just use random().
+        // If we want deterministic "empty" behavior, we might need a distinct random seed each time.
+        // Let's assume if seed is empty string, we use Math.random() directly or a random seed.
+        
+        let random;
+        if (!seedVal) {
+             random = Math.random;
+        } else {
+            if (typeof seedVal === 'string') {
+                let h = 0xdeadbeef;
+                for(let i = 0; i < seedVal.length; i++)
+                    h = Math.imul(h ^ seedVal.charCodeAt(i), 2654435761);
+                seedVal = (h ^ h >>> 16) >>> 0;
+            }
+            random = mulberry32(seedVal);
+        }
+        
+        const colLengths = [];
+
+        // 1. Calculate column lengths
+        for (let x = 0; x < config.width; x++) {
+            let length = 0;
+            while (length < config.height) {
+                if (random() < config.decay) {
+                   break;
+                }
+                length++;
+            }
+            colLengths.push(length);
+        }
+
+        let output = "";
+
+        // 2. Render grid
+        for (let y = 0; y < config.height; y++) {
+            let rowStr = "";
+            for (let x = 0; x < config.width; x++) {
+                let isFilled = false;
+                
+                if (config.reverse) {
+                    isFilled = y >= (config.height - colLengths[x]);
+                } else {
+                    isFilled = y < colLengths[x];
+                }
+
+                if (isFilled) {
+                    const charIndex = Math.floor(random() * config.chars.length);
+                    rowStr += config.chars[charIndex];
+                } else {
+                    rowStr += " ";
+                }
+            }
+            output += rowStr + "\n";
+        }
+        return output;
+    }
+
+    // --- UI bindings ---
+
+    const $ = id => document.getElementById(id);
+    
+    const els = {
+        width: $('width'),
+        height: $('height'),
+        chars: $('chars'),
+        fontName: $('fontName'),
+        textColor: $('textColor'),
+        bgColor: $('bgColor'),
+        direction: $('direction'),
+        decay: $('decay'),
+        decayVal: $('decayVal'),
+        seed: $('seed'),
+        output: $('output'),
+        container: $('preview-container'),
+        btnGen: $('regenerate'),
+        btnDownload: $('download')
+    };
+
+    function updateDecayVal() {
+        els.decayVal.textContent = els.decay.value;
+    }
+
+    let currentFontLink = null;
+
+    function loadGoogleFont(fontName) {
+        if (!fontName) return;
+        const id = 'font-' + fontName.replace(/\s+/g, '-');
+        if (document.getElementById(id)) return; // Already loaded
+
+        const link = document.createElement('link');
+        link.id = id;
+        link.rel = 'stylesheet';
+        link.href = `https://fonts.googleapis.com/css2?family=${fontName.replace(/\s+/g, '+')}:wght@400;700&display=swap`;
+        document.head.appendChild(link);
+    }
+
+    const STORAGE_KEY = 'binary_rain_config';
+
+    function saveSettings() {
+        const config = {
+            width: els.width.value,
+            height: els.height.value,
+            chars: els.chars.value,
+            fontName: els.fontName.value,
+            textColor: els.textColor.value,
+            bgColor: els.bgColor.value,
+            direction: els.direction.value,
+            decay: els.decay.value,
+            seed: els.seed.value
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+    }
+
+    function loadSettings() {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            try {
+                const config = JSON.parse(saved);
+                if (config.width) els.width.value = config.width;
+                if (config.height) els.height.value = config.height;
+                if (config.chars) els.chars.value = config.chars;
+                if (config.fontName) els.fontName.value = config.fontName;
+                if (config.textColor) els.textColor.value = config.textColor;
+                if (config.bgColor) els.bgColor.value = config.bgColor;
+                if (config.direction) els.direction.value = config.direction;
+                if (config.decay) els.decay.value = config.decay;
+                if (config.seed !== undefined) els.seed.value = config.seed;
+            } catch (e) {
+                console.error("Failed to load settings", e);
+            }
+        }
+    }
+
+    function render() {
+        const config = {
+            width: parseInt(els.width.value) || 80,
+            height: parseInt(els.height.value) || 40,
+            chars: els.chars.value || "01",
+            fontName: els.fontName.value || "Space Mono",
+            textColor: els.textColor.value,
+            bgColor: els.bgColor.value,
+            reverse: els.direction.value === 'reverse',
+            decay: parseFloat(els.decay.value) || 0.05,
+            seed: els.seed.value
+        };
+
+        // Update CSS Variables
+        document.documentElement.style.setProperty('--bg-color', config.bgColor);
+        document.documentElement.style.setProperty('--text-color', config.textColor);
+        
+        // Font loading
+        loadGoogleFont(config.fontName);
+        document.documentElement.style.setProperty('--font-family', `'${config.fontName}', monospace`);
+
+        // Generate Text
+        const text = generateRain(config);
+        els.output.textContent = text;
+        
+        saveSettings();
+    }
+
+    // Event Listeners
+    [
+        els.width, els.height, els.chars, 
+        els.fontName, els.textColor, els.bgColor, 
+        els.direction, els.decay, els.seed
+    ].forEach(el => {
+        el.addEventListener('input', () => {
+            if(el === els.decay) updateDecayVal();
+            render();
+        });
+    });
+
+    els.btnGen.addEventListener('click', render);
+
+    els.btnDownload.addEventListener('click', () => {
+        const config = {
+            width: parseInt(els.width.value),
+            height: parseInt(els.height.value),
+            chars: els.chars.value,
+            fontName: els.fontName.value,
+            textColor: els.textColor.value,
+            bgColor: els.bgColor.value,
+            decay: parseFloat(els.decay.value),
+            seed: els.seed.value,
+            reverse: els.direction.value === 'reverse'
+        };
+        const content = els.output.textContent;
+        
+        const fileContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Binary Rain Static</title>
+    <link href="https://fonts.googleapis.com/css2?family=${config.fontName.replace(/\s+/g, '+')}:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: ${config.bgColor};
+            color: ${config.textColor};
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        pre {
+            font-family: '${config.fontName}', monospace;
+            font-weight: 700;
+            line-height: 1;
+            letter-spacing: 0;
+            white-space: pre;
+        }
+    </style>
+</head>
+<body>
+    <pre>${content}</pre>
+</body>
+</html>`;
+        
+        const blob = new Blob([fileContent], {type: 'text/html'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'binary-rain.html';
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+
+    // Initial load and render
+    loadSettings();
+    updateDecayVal();
+    render();
+
+</script>
+
+</body>
+</html>
