@@ -10,8 +10,23 @@ jobs:
   detectChanges:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      pull-requests: read
     outputs:
+      CD: ${{ steps.filter.outputs.CD }}
       public: ${{ steps.filter.outputs.public }}
+    steps:
+    - uses: actions/checkout@v3
+    - uses: dorny/paths-filter@v2
+      id: filter
+      with:
+        base: master
+        list-files: 'csv'
+        filters: |
+          CD:
+            - '.github/workflows/**'
+          public:
+            - 'public/**'
     
 
   uploadPublicAssets: 
