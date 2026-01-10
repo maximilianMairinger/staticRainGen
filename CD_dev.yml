@@ -1,0 +1,93 @@
+name: dev
+
+on:
+  push:
+    branches:
+    - dev
+
+jobs:
+  # JOB to run change detection
+  detectChanges:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      public: ${{ steps.filter.outputs.public }}
+    
+
+  uploadPublicAssets: 
+    runs-on: ubuntu-latest
+    needs: [detectChanges]
+    timeout-minutes: 15
+
+    
+    steps: 
+    - name: "checkout"
+      if: ${{ needs.detectChanges.outputs.public == 'true' || (needs.detectChanges.outputs.CD == 'true') }}
+      uses: actions/checkout@master
+      with:
+        lfs: "true"
+
+    - name: Upload public files
+      if: ${{ needs.detectChanges.outputs.public == 'true' || (needs.detectChanges.outputs.CD == 'true') }}
+      uses: appleboy/scp-action@v0.1.1
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.KEY }}
+        passphrase: ${{ secrets.PASSPHRASE }}
+        source: "public"
+        target: /var/www/html/staticRainGen/dev/_${{github.sha}}
+        overwrite: true
+
+  deploy: 
+    runs-on: ubuntu-latest
+    needs: [detectChanges, uploadPublicAssets]
+    if: always()
+    timeout-minutes: 15
+
+    steps:
+    - name: "checkout"
+      if: ${{ needs.detectChanges.outputs.deployOption == 'true' }}
+      uses: actions/checkout@master
+
+    - name: Upload deploy option files
+      if: ${{ needs.detectChanges.outputs.deployOption == 'true' }}
+      uses: appleboy/scp-action@v0.1.1
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.KEY }}
+        passphrase: ${{ secrets.PASSPHRASE }}
+        source: ".deploy"
+        target: /var/www/html/staticRainGen/dev
+        overwrite: true
+
+
+    - name: Moving files from temp storage 
+      if: ${{ (needs.detectChanges.outputs.dependencies == 'true') || (needs.detectChanges.outputs.images == 'true') || (needs.detectChanges.outputs.server == 'true') || (needs.detectChanges.outputs.replServer == 'true') || (needs.detectChanges.outputs.app == 'true') || (needs.detectChanges.outputs.serviceWorker == 'true') || (needs.detectChanges.outputs.public == 'true') || (needs.detectChanges.outputs.CD == 'true') }}
+      uses: appleboy/ssh-action@master
+      with: 
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.KEY }}
+        passphrase: ${{ secrets.PASSPHRASE }}
+        # https://unix.stackexchange.com/a/182155/431792
+        script: |
+          cp -rlf /var/www/html/staticRainGen/dev/_${{github.sha}}/* /var/www/html/staticRainGen/dev
+          rm -r /var/www/html/staticRainGen/dev/_${{github.sha}}
+
+    
+    - name: Restarting server
+      if: ${{ (needs.detectChanges.outputs.deployOption == 'true') || (needs.detectChanges.outputs.server == 'true') || (needs.detectChanges.outputs.replServer == 'true') || (needs.detectChanges.outputs.dependencies == 'true') || (needs.detectChanges.outputs.CD == 'true') }}
+      uses: appleboy/ssh-action@master
+      with: 
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.KEY }}
+        passphrase: ${{ secrets.PASSPHRASE }}
+        script: |
+          cd /var/www/html/staticRainGen/dev
+          source ~/.nvm/nvm.sh
+          nvm use default
+          npx wait-on ecosystem.config.js
+          node pm2Reload.js
