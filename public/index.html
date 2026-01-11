@@ -104,6 +104,7 @@
 
         #output {
             font-family: var(--font-family);
+            font-size: 16px;
             margin: 0;
             white-space: pre;
             line-height: 1;
@@ -112,6 +113,13 @@
             /* Ensure it doesn't shrink below content size */
             min-width: min-content; 
             min-height: min-content;
+            transform-origin: 0 0;
+        }
+
+        #output-wrapper {
+             /* Wrapper will take the exact target pixel size to force scrollbars on parent */
+             overflow: hidden; 
+             /* We might not want overflow:hidden if we want to see if it bleeds, but usually we match sizes. */
         }
 
         /* Utility */
@@ -217,7 +225,9 @@
 </aside>
 
 <main id="preview-container">
-    <pre id="output"></pre>
+    <div id="output-wrapper">
+        <pre id="output"></pre>
+    </div>
 </main>
 
 <script>
@@ -312,6 +322,7 @@
         decayInput: $('decayInput'),
         seed: $('seed'),
         output: $('output'),
+        outputWrapper: $('output-wrapper'),
         container: $('preview-container'),
         container: $('preview-container'),
         btnPng: $('downloadPng'),
@@ -351,17 +362,16 @@
         const span = document.createElement('span');
         span.textContent = 'X';
         span.style.fontFamily = `"${fontName}", monospace`;
-        span.style.fontSize = '1rem';
+        span.style.fontSize = '16px'; // Explicit size to match render assumption
         span.style.fontWeight = '700';
         span.style.visibility = 'hidden';
         span.style.position = 'absolute';
         span.style.whiteSpace = 'pre';
-        span.style.lineHeight = '1'; // Ensure line-height matches output
+        span.style.lineHeight = '1'; 
         
-        // Append to output so it inherits same styles
-        els.output.appendChild(span);
+        document.body.appendChild(span);
         const rect = span.getBoundingClientRect();
-        els.output.removeChild(span);
+        document.body.removeChild(span);
         return { width: rect.width, height: rect.height };
     }
 
@@ -392,7 +402,9 @@
             direction: els.direction.value,
             direction: els.direction.value,
             decay: els.decayInput.value,
-            seed: els.seed.value
+            seed: els.seed.value,
+            scaleX: parseFloat(els.output.getAttribute('data-scale-x')) || 1,
+            scaleY: parseFloat(els.output.getAttribute('data-scale-y')) || 1
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
     }
@@ -414,6 +426,12 @@
                      updateDecayUI(parseFloat(config.decay));
                 }
                 if (config.seed !== undefined) els.seed.value = config.seed;
+                
+                // Store scale in DOM for state persistence across renders (or could verify global var)
+                // We'll trust the inputs to drive the chars logic, but we need to restore the scale state for render.
+                if (config.scaleX) els.output.setAttribute('data-scale-x', config.scaleX);
+                if (config.scaleY) els.output.setAttribute('data-scale-y', config.scaleY);
+
             } catch (e) {
                 console.error("Failed to load settings", e);
             }
@@ -431,8 +449,12 @@
             reverse: els.direction.value === 'reverse',
             bgColor: els.bgColor.value,
             reverse: els.direction.value === 'reverse',
-            decay: !isNaN(parseFloat(els.decayInput.value)) ? parseFloat(els.decayInput.value) : 0.05,
-            seed: els.seed.value
+            decay: parseFloat(els.decayInput.value) || 0.05,
+            seed: els.seed.value,
+            
+            // Read current scale state
+            scaleX: parseFloat(els.output.getAttribute('data-scale-x')) || 1,
+            scaleY: parseFloat(els.output.getAttribute('data-scale-y')) || 1
         };
 
         // Update CSS Variables
@@ -447,7 +469,62 @@
         const text = generateRain(config);
         els.output.textContent = text;
         
+        // Apply Scale & Layout
+        els.output.style.transform = `scale(${config.scaleX}, ${config.scaleY})`;
+        
+        // Set wrapper size to the "virtual" pixel size desired
+        // If unscaled, it's just auto. If scaled, we want it to match the px inputs if available,
+        // or just fit the scaled content.
+        // Best approach: Measure the natural size, apply scale, set wrapper to that.
+        
+        // If we have explicit pixel targets in inputs, use those?
+        // Actually, render shouldn't depend on inputs if possible, but config doesn't store targetPx.
+        // Let's derive it: naturalSize * scale.
+        
+        // We need to wait for layout? No, textContent is sync.
+        // But font loading might shift things. We have the resize observer or just relying on measure?
+        // Let's assume font is stable or similar enough.
+        
+        // Reset wrapper to auto to measure natural size
+        els.outputWrapper.style.width = '';
+        els.outputWrapper.style.height = '';
+        
+        const naturalWidth = els.output.offsetWidth;
+        const naturalHeight = els.output.offsetHeight;
+        
+        const targetWidth = naturalWidth * config.scaleX;
+        const targetHeight = naturalHeight * config.scaleY;
+        
+        els.outputWrapper.style.width = `${targetWidth}px`;
+        els.outputWrapper.style.height = `${targetHeight}px`;
+
         saveSettings();
+    }
+
+    function calculateOptimal(targetPx, charSize) {
+        if (!charSize || charSize <= 0) return { count: 0, scale: 1 };
+        
+        const exactChars = targetPx / charSize;
+        const low = Math.floor(exactChars);
+        const high = Math.ceil(exactChars);
+        
+        if (low === 0) return { count: Math.max(1, high), scale: targetPx / (Math.max(1, high) * charSize) };
+        
+        const sizeLow = low * charSize;
+        const sizeHigh = high * charSize;
+        
+        const scaleLow = targetPx / sizeLow;
+        const scaleHigh = targetPx / sizeHigh;
+        
+        // Choose option closest to scale 1.0
+        const diffLow = Math.abs(1 - scaleLow);
+        const diffHigh = Math.abs(1 - scaleHigh);
+        
+        if (diffLow < diffHigh) {
+            return { count: low, scale: scaleLow };
+        } else {
+            return { count: high, scale: scaleHigh };
+        }
     }
 
     // Event Listeners
@@ -462,8 +539,9 @@
                  updateDecayUI(val, 'slider');
             }
             
-            // Bidirectional binding for chars inputs
+            // Bidirectional binding for chars inputs - RESET SCALE
             if (el === els.width) {
+                 els.output.setAttribute('data-scale-x', '1');
                  const chars = parseInt(els.width.value) || 0;
                  if (chars > 0) {
                      const dims = measureCharDimensions(els.fontName.value || "Space Mono");
@@ -471,6 +549,7 @@
                  }
             }
             if (el === els.height) {
+                 els.output.setAttribute('data-scale-y', '1');
                  const chars = parseInt(els.height.value) || 0;
                  if (chars > 0) {
                      const dims = measureCharDimensions(els.fontName.value || "Space Mono");
@@ -496,22 +575,18 @@
         if (px > 0) {
             const dims = measureCharDimensions(els.fontName.value || "Space Mono");
             if (dims.width > 0) {
-                const charsCount = Math.floor(px / dims.width);
-                els.width.value = charsCount;
+                const optimal = calculateOptimal(px, dims.width);
+                els.width.value = optimal.count;
+                els.output.setAttribute('data-scale-x', optimal.scale);
                 render();
             }
         }
     });
 
     els.widthPx.addEventListener('blur', () => {
-        const px = parseFloat(els.widthPx.value);
-        if (px > 0) {
-            const dims = measureCharDimensions(els.fontName.value || "Space Mono");
-            if (dims.width > 0) {
-                const charsCount = Math.floor(px / dims.width);
-                els.widthPx.value = Math.floor(charsCount * dims.width);
-            }
-        }
+         // No longer need strict rounding on blur since we support arbitrary px via zoom
+         // But maybe align the input to match exactly what we are rendering?
+         // render() updates the wrapper size, but we might want to keep the user's input.
     });
 
     // Height Px Binding
@@ -520,22 +595,16 @@
         if (px > 0) {
             const dims = measureCharDimensions(els.fontName.value || "Space Mono");
             if (dims.height > 0) {
-                const charsCount = Math.floor(px / dims.height);
-                els.height.value = charsCount;
+                const optimal = calculateOptimal(px, dims.height);
+                els.height.value = optimal.count;
+                els.output.setAttribute('data-scale-y', optimal.scale);
                 render();
             }
         }
     });
 
     els.heightPx.addEventListener('blur', () => {
-        const px = parseFloat(els.heightPx.value);
-        if (px > 0) {
-            const dims = measureCharDimensions(els.fontName.value || "Space Mono");
-            if (dims.height > 0) {
-                const charsCount = Math.floor(px / dims.height);
-                els.heightPx.value = Math.floor(charsCount * dims.height);
-            }
-        }
+        // No strict rounding needed
     });
 
     els.btnPng.addEventListener('click', () => {
@@ -554,13 +623,30 @@
         const charH = dim.height;
 
         const canvas = document.createElement('canvas');
-        canvas.width = Math.ceil(config.width * charW);
-        canvas.height = Math.ceil(config.height * charH);
+        // Use exact pixel dimensions from inputs if available, or calc from chars * size * scale
+        // Ideally we just use what the user sees in the wrapper size.
+        // We can re-calculate targetPx from current settings:
+        
+        const scaleX = parseFloat(els.output.getAttribute('data-scale-x')) || 1;
+        const scaleY = parseFloat(els.output.getAttribute('data-scale-y')) || 1;
+        
+        canvas.width = Math.ceil(config.width * charW * scaleX);
+        canvas.height = Math.ceil(config.height * charH * scaleY);
         const ctx = canvas.getContext('2d');
+        
+        // Scale context
+        ctx.scale(scaleX, scaleY);
 
         // Background
+        // When scaling, we need to cover the full canvas. 
+        // Logic: fillRect covers (0,0, width/scaleX, height/scaleY) or just fillRect(0,0, canvas.width, canvas.height) with identity scale?
+        // ctx.scale affects drawing coordinates.
+        // Let's reset transform for background to be safe/easy.
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.fillStyle = config.bgColor;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
 
         // Text
         ctx.font = `700 ${16}px '${config.fontName}', monospace`; // Assuming 1rem = 16px roughly for canvas, or we need to match measureCharDimensions
