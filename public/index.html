@@ -204,7 +204,7 @@
         <input type="text" id="seed" value="" placeholder="Random">
     </div>
     
-    <button id="regenerate">Regenerate</button>
+    <button id="downloadPng">Download as PNG</button>
     <button id="download">Download HTML</button>
 
     <a href="https://github.com/maximilianMairinger/staticRainGen" target="_blank" class="github-link" aria-label="View Source on GitHub">
@@ -311,7 +311,8 @@
         seed: $('seed'),
         output: $('output'),
         container: $('preview-container'),
-        btnGen: $('regenerate'),
+        container: $('preview-container'),
+        btnPng: $('downloadPng'),
         btnDownload: $('download')
     };
 
@@ -494,7 +495,56 @@
         }
     });
 
-    els.btnGen.addEventListener('click', render);
+    els.btnPng.addEventListener('click', () => {
+        const config = {
+            width: parseInt(els.width.value) || 80,
+            height: parseInt(els.height.value) || 40,
+            chars: els.chars.value || "01",
+            fontName: els.fontName.value || "Space Mono",
+            textColor: els.textColor.value,
+            bgColor: els.bgColor.value,
+        };
+        
+        // Measure char size explicitly for canvas scaling
+        const dim = measureCharDimensions(config.fontName);
+        const charW = dim.width;
+        const charH = dim.height;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.ceil(config.width * charW);
+        canvas.height = Math.ceil(config.height * charH);
+        const ctx = canvas.getContext('2d');
+
+        // Background
+        ctx.fillStyle = config.bgColor;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Text
+        ctx.font = `700 ${16}px '${config.fontName}', monospace`; // Assuming 1rem = 16px roughly for canvas, or we need to match measureCharDimensions
+        // Wait, measureCharDimensions uses 1rem. We need to be consistent.
+        // Let's force px size in measureCharDimensions or use a fixed px here.
+        // measureCharDimensions uses '1rem'. Standard browser 1rem = 16px.
+        // To be safe, let's use the computed style or just hardcode 16px if we want (since it's a generated image, 16px is fine).
+        // Actually, let's use the computed font string from the span if possible, or just stick to 16px as the base.
+        
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = config.textColor;
+        
+        // We need to re-render the font property exactly as the browser sees it? 
+        // The canvas font string format: "style weight size family"
+        ctx.font = `bold 16px "${config.fontName}", monospace`;
+
+        const lines = els.output.textContent.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+             ctx.fillText(lines[i], 0, i * charH);
+        }
+
+        const url = canvas.toDataURL("image/png");
+        const a = document.createElement('a');
+        a.download = `binary_rain_${config.width}x${config.height}.png`;
+        a.href = url;
+        a.click();
+    });
 
     els.btnDownload.addEventListener('click', () => {
         const config = {
